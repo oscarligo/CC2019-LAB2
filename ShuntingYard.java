@@ -1,0 +1,274 @@
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.List;
+
+public class ShuntingYard {
+    private static final String CONCATENATION = "·";
+    private static final String BINARY_OPERATORS = "|·^";
+    private static final String POSTFIX_OPERATORS = "?*+";
+
+    private ArrayList<ArrayList<String>> tokens;
+
+    public ShuntingYard() {
+        tokens = new ArrayList<>();
+    }
+
+    public void tokenize(File file) throws IOException {
+        tokens.clear();
+        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                ArrayList<String> lineTokens = new ArrayList<>();
+                for (char symbol : line.toCharArray()) {
+                    if (!Character.isWhitespace(symbol)) {
+                        lineTokens.add(String.valueOf(symbol));
+                    }
+                }
+                tokens.add(lineTokens);
+            }
+        }
+    }
+
+    public ArrayList<ArrayList<String>> getTokens() {
+        return tokens;
+    }
+
+    public int getPrecedence(String token) {
+        if (token.equals("(")) {
+            return 1;
+        }
+        if (token.equals("|")) {
+            return 2;
+        }
+        if (token.equals(CONCATENATION)) {
+            return 3;
+        }
+        if (POSTFIX_OPERATORS.contains(token)) {
+            return 4;
+        }
+        if (token.equals("^")) {
+            return 5;
+        }
+        return 0;
+    }
+
+    public ArrayList<String> formatRegEx(ArrayList<String> regex) {
+        ArrayList<String> grouped = groupEscapedCharacters(regex);
+        ArrayList<String> formatted = new ArrayList<>();
+
+        for (int i = 0; i < grouped.size(); i++) {
+            String current = grouped.get(i);
+            formatted.add(current);
+            if (i + 1 < grouped.size()
+                    && canEndOperand(current)
+                    && canStartOperand(grouped.get(i + 1))) {
+                formatted.add(CONCATENATION);
+            }
+        }
+        return formatted;
+    }
+
+    public ArrayList<String> infixToPostfix(ArrayList<String> regex) {
+        return infixToPostfix(regex, true);
+    }
+
+    private ArrayList<String> infixToPostfix(ArrayList<String> regex, boolean trace) {
+        ArrayList<String> postfix = new ArrayList<>();
+        Deque<String> stack = new ArrayDeque<>();
+        ArrayList<String> formattedRegEx = formatRegEx(regex);
+        boolean expectingOperand = true;
+
+        if (formattedRegEx.isEmpty()) {
+            throw new IllegalArgumentException("expresión vacía");
+        }
+        if (trace) {
+            System.out.println("Tokens: " + String.join(" ", formattedRegEx));
+            System.out.printf("%-10s %-22s %-35s %s%n",
+                    "Token", "Acción", "Salida", "Pila");
+        }
+
+        for (String token : formattedRegEx) {
+            String action;
+            if (isOperand(token)) {
+                postfix.add(token);
+                expectingOperand = false;
+                action = "enviar a salida";
+            } else if (token.equals("(")) {
+                stack.addLast(token);
+                expectingOperand = true;
+                action = "apilar";
+            } else if (token.equals(")")) {
+                if (expectingOperand) {
+                    throw new IllegalArgumentException("paréntesis vacío o cierre inesperado");
+                }
+                int moved = 0;
+                while (!stack.isEmpty() && !stack.peekLast().equals("(")) {
+                    postfix.add(stack.removeLast());
+                    moved++;
+                }
+                if (stack.isEmpty()) {
+                    throw new IllegalArgumentException("paréntesis de cierre sin apertura");
+                }
+                stack.removeLast();
+                expectingOperand = false;
+                action = "cerrar grupo (" + moved + " movidos)";
+            } else {
+                if (expectingOperand) {
+                    throw new IllegalArgumentException(
+                            "operador " + token + " sin expresión previa");
+                }
+                int moved = 0;
+                while (!stack.isEmpty()
+                        && !stack.peekLast().equals("(")
+                        && getPrecedence(stack.peekLast()) >= getPrecedence(token)) {
+                    postfix.add(stack.removeLast());
+                    moved++;
+                }
+                stack.addLast(token);
+                expectingOperand = isBinaryOperator(token);
+                action = moved == 0 ? "apilar" : "mover " + moved + " y apilar";
+            }
+            if (trace) {
+                printStep(token, action, postfix, stack);
+            }
+        }
+
+        if (expectingOperand) {
+            throw new IllegalArgumentException("la expresión termina con un operador");
+        }
+        while (!stack.isEmpty()) {
+            if (stack.peekLast().equals("(")) {
+                throw new IllegalArgumentException("paréntesis de apertura sin cierre");
+            }
+            postfix.add(stack.removeLast());
+            if (trace) {
+                printStep("fin", "vaciar pila", postfix, stack);
+            }
+        }
+
+        ArrayList<String> normalized = normalizeExtensions(postfix);
+        if (trace && !postfix.equals(normalized)) {
+            System.out.println("Postfix con extensiones: " + String.join(" ", postfix));
+            System.out.println("Conversión: R+ = RR*· y R? = Rε|");
+        }
+        return normalized;
+    }
+
+    private ArrayList<String> groupEscapedCharacters(ArrayList<String> regex) {
+        ArrayList<String> grouped = new ArrayList<>();
+
+        for (int i = 0; i < regex.size(); i++) {
+            String token = regex.get(i);
+            if (token.equals("\\")) {
+                if (++i == regex.size()) {
+                    throw new IllegalArgumentException("carácter de escape sin símbolo");
+                }
+                grouped.add("\\" + regex.get(i));
+            } else if (token.equals("[")) {
+                StringBuilder characterClass = new StringBuilder("[");
+                boolean closed = false;
+                while (++i < regex.size()) {
+                    token = regex.get(i);
+                    characterClass.append(token);
+                    if (token.equals("\\")) {
+                        if (++i == regex.size()) {
+                            throw new IllegalArgumentException(
+                                    "carácter de escape incompleto dentro de []");
+                        }
+                        characterClass.append(regex.get(i));
+                    } else if (token.equals("]")) {
+                        closed = true;
+                        break;
+                    }
+                }
+                if (!closed) {
+                    throw new IllegalArgumentException("clase de caracteres sin cerrar");
+                }
+                grouped.add(characterClass.toString());
+            } else {
+                grouped.add(token);
+            }
+        }
+        return grouped;
+    }
+
+    private ArrayList<String> normalizeExtensions(ArrayList<String> postfix) {
+        Deque<List<String>> expressions = new ArrayDeque<>();
+
+        for (String token : postfix) {
+            if (isOperand(token)) {
+                expressions.addLast(new ArrayList<>(Collections.singletonList(token)));
+            } else if (token.equals("*")) {
+                ArrayList<String> expression = pop(expressions, token);
+                expression.add("*");
+                expressions.addLast(expression);
+            } else if (token.equals("+")) {
+                ArrayList<String> expression = pop(expressions, token);
+                ArrayList<String> expanded = new ArrayList<>(expression);
+                expanded.addAll(expression);
+                expanded.add("*");
+                expanded.add(CONCATENATION);
+                expressions.addLast(expanded);
+            } else if (token.equals("?")) {
+                ArrayList<String> expression = pop(expressions, token);
+                expression.add("ε");
+                expression.add("|");
+                expressions.addLast(expression);
+            } else {
+                ArrayList<String> right = pop(expressions, token);
+                ArrayList<String> left = pop(expressions, token);
+                left.addAll(right);
+                left.add(token);
+                expressions.addLast(left);
+            }
+        }
+
+        if (expressions.size() != 1) {
+            throw new IllegalArgumentException("expresión incompleta");
+        }
+        return new ArrayList<>(expressions.removeLast());
+    }
+
+    private ArrayList<String> pop(Deque<List<String>> expressions, String operator) {
+        if (expressions.isEmpty()) {
+            throw new IllegalArgumentException("faltan operandos para " + operator);
+        }
+        return new ArrayList<>(expressions.removeLast());
+    }
+
+    private boolean isOperand(String token) {
+        return !token.equals("(")
+                && !token.equals(")")
+                && !isBinaryOperator(token)
+                && !isPostfixOperator(token);
+    }
+
+    private boolean isBinaryOperator(String token) {
+        return token.length() == 1 && BINARY_OPERATORS.contains(token);
+    }
+
+    private boolean isPostfixOperator(String token) {
+        return token.length() == 1 && POSTFIX_OPERATORS.contains(token);
+    }
+
+    private boolean canEndOperand(String token) {
+        return isOperand(token) || token.equals(")") || isPostfixOperator(token);
+    }
+
+    private boolean canStartOperand(String token) {
+        return isOperand(token) || token.equals("(");
+    }
+
+    private void printStep(String token, String action, List<String> output,
+            Deque<String> stack) {
+        System.out.printf("%-10s %-22s %-35s %s%n",
+                token, action, String.join(" ", output), stack);
+    }
+
+}
