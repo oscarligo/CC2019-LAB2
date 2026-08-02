@@ -4,7 +4,6 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
 
@@ -152,12 +151,7 @@ public class ShuntingYard {
             }
         }
 
-        ArrayList<String> normalized = normalizeExtensions(postfix);
-        if (trace && !postfix.equals(normalized)) {
-            System.out.println("Postfix con extensiones: " + String.join(" ", postfix));
-            System.out.println("Conversión: R+ = RR*· y R? = Rε|");
-        }
-        return normalized;
+        return postfix;
     }
 
     private ArrayList<String> groupEscapedCharacters(ArrayList<String> regex) {
@@ -171,75 +165,42 @@ public class ShuntingYard {
                 }
                 grouped.add("\\" + regex.get(i));
             } else if (token.equals("[")) {
-                StringBuilder characterClass = new StringBuilder("[");
+                ArrayList<String> members = new ArrayList<>();
                 boolean closed = false;
                 while (++i < regex.size()) {
                     token = regex.get(i);
-                    characterClass.append(token);
                     if (token.equals("\\")) {
                         if (++i == regex.size()) {
                             throw new IllegalArgumentException(
                                     "carácter de escape incompleto dentro de []");
                         }
-                        characterClass.append(regex.get(i));
+                        members.add("\\" + regex.get(i));
                     } else if (token.equals("]")) {
                         closed = true;
                         break;
+                    } else {
+                        members.add(token);
                     }
                 }
                 if (!closed) {
                     throw new IllegalArgumentException("clase de caracteres sin cerrar");
                 }
-                grouped.add(characterClass.toString());
+                if (members.isEmpty()) {
+                    throw new IllegalArgumentException("clase de caracteres vacía");
+                }
+                grouped.add("(");
+                for (int member = 0; member < members.size(); member++) {
+                    if (member > 0) {
+                        grouped.add("|");
+                    }
+                    grouped.add(members.get(member));
+                }
+                grouped.add(")");
             } else {
                 grouped.add(token);
             }
         }
         return grouped;
-    }
-
-    private ArrayList<String> normalizeExtensions(ArrayList<String> postfix) {
-        Deque<List<String>> expressions = new ArrayDeque<>();
-
-        for (String token : postfix) {
-            if (isOperand(token)) {
-                expressions.addLast(new ArrayList<>(Collections.singletonList(token)));
-            } else if (token.equals("*")) {
-                ArrayList<String> expression = pop(expressions, token);
-                expression.add("*");
-                expressions.addLast(expression);
-            } else if (token.equals("+")) {
-                ArrayList<String> expression = pop(expressions, token);
-                ArrayList<String> expanded = new ArrayList<>(expression);
-                expanded.addAll(expression);
-                expanded.add("*");
-                expanded.add(CONCATENATION);
-                expressions.addLast(expanded);
-            } else if (token.equals("?")) {
-                ArrayList<String> expression = pop(expressions, token);
-                expression.add("ε");
-                expression.add("|");
-                expressions.addLast(expression);
-            } else {
-                ArrayList<String> right = pop(expressions, token);
-                ArrayList<String> left = pop(expressions, token);
-                left.addAll(right);
-                left.add(token);
-                expressions.addLast(left);
-            }
-        }
-
-        if (expressions.size() != 1) {
-            throw new IllegalArgumentException("expresión incompleta");
-        }
-        return new ArrayList<>(expressions.removeLast());
-    }
-
-    private ArrayList<String> pop(Deque<List<String>> expressions, String operator) {
-        if (expressions.isEmpty()) {
-            throw new IllegalArgumentException("faltan operandos para " + operator);
-        }
-        return new ArrayList<>(expressions.removeLast());
     }
 
     private boolean isOperand(String token) {
@@ -269,6 +230,19 @@ public class ShuntingYard {
             Deque<String> stack) {
         System.out.printf("%-10s %-22s %-35s %s%n",
                 token, action, String.join(" ", output), stack);
+    }
+
+    public static void selfTest() {
+        ArrayList<String> expression = new ArrayList<>();
+        for (char symbol : "[ae]+".toCharArray()) {
+            expression.add(String.valueOf(symbol));
+        }
+        String postfix = String.join("",
+                new ShuntingYard().infixToPostfix(expression, false));
+        if (!postfix.equals("ae|+")) {
+            throw new AssertionError("se esperaba ae|+, se obtuvo " + postfix);
+        }
+        System.out.println("Prueba correcta: [ae]+ -> ae|+");
     }
 
 }

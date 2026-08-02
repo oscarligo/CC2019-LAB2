@@ -1,32 +1,5 @@
 # Teoría de la Computación - Laboratorio No. 2
 
-## Problema No. 2 - Algoritmo para balancear expresiones infix
-
-Programa en Java que verifica si las expresiones de un archivo de texto están balanceadas.
-
-## Funciones del problema 2
-
-- Lee y procesa el archivo línea por línea.
-- Valida paréntesis `()`, corchetes `[]` y llaves `{}`.
-- Usa una pila para respetar el orden de apertura y cierre.
-- Muestra cada operación de la pila: `push`, `pop` o `mismatch`.
-- Indica si cada expresión está bien formada.
-- Ignora espacios en blanco.
-
-Por defecto se procesa `input.txt`. También se puede indicar otro archivo:
-
-## Formato de entrada
-
-Cada línea debe contener una expresión independiente:
-
-```text
-(a+b)*(c-d)
-([a+b]*{c-d})
-(a+b]
-```
-
-Las dos primeras expresiones están balanceadas, la última no lo está.
-
 ## Problema No. 3 - Algoritmo Shunting Yard
 
 ### Investigación
@@ -49,8 +22,8 @@ Al terminar la entrada, los operadores restantes pasan a la salida.
 
 Para expresiones regulares, `*`, `+` y `?` son operadores postfix; la
 concatenación tiene la siguiente precedencia y `|` tiene la menor. `R+`
-significa una o más repeticiones y se convierte en `RR*`; `R?` significa cero
-o una repetición y se convierte en `R|ε` (Oracle, s. f.-a). Los caracteres
+significa una o más repeticiones y `R?` significa cero o una repetición
+(Oracle, s. f.-a). Los caracteres
 precedidos por `\` se procesan como un solo operando escapado
 (Oracle, s. f.-b).
 
@@ -63,38 +36,11 @@ de la expresión.
 - Lee una expresión regular por cada línea de `regex.txt`.
 - Convierte la expresión de infix a postfix con Shunting Yard.
 - Muestra, para cada token, la salida y el estado de la pila.
-- Procesa literales, `ε`, grupos, alternancia y clases como `[ae]`.
+- Expande clases como `[ae]` a `(a|e)` antes de convertirlas.
 - Inserta concatenaciones implícitas usando `·`.
-- Convierte `+` y `?` a operaciones básicas con `*`, `|` y `ε`.
+- Conserva `*`, `+` y `?` como operadores postfix.
 - Reconoce caracteres escapados y rechaza un `\` incompleto.
 - Reporta paréntesis, clases y operadores inválidos sin detener las demás líneas.
-
-### Ejecución del problema 3
-
-```bash
-javac Main.java InfixBalancer.java ShuntingYard.java
-java Main postfix regex.txt
-```
-
-El archivo es opcional; sin argumento se utiliza `regex.txt`:
-
-```bash
-java Main postfix
-```
-
-La comprobación mínima se ejecuta desde el mismo `Main`:
-
-```bash
-java Main test
-```
-
-### Precedencia utilizada
-
-| Prioridad | Operadores | Función |
-| --- | --- | --- |
-| 1, mayor | `*`, `+`, `?` | Repetición u opción postfix |
-| 2 | `·` | Concatenación insertada automáticamente |
-| 3, menor | `|` | Alternancia |
 
 ## Referencias
 
