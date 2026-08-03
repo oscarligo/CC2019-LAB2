@@ -1,2 +1,3 @@
-h       ola            p  u e b  adetodenizado     r
-asdasdasdadadas
+(a+b)*(c-d)
+([a+b]*{c-d})
+(a+b]

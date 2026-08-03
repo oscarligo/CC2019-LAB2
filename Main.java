@@ -1,22 +1,26 @@
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.ArrayList;
 
-public class Main{
+public class Main {
     public static void main(String[] args) {
-        
-        InfixBalancer tokenizer = new InfixBalancer();
+        File file = new File(args.length > 0 ? args[0] : "input.txt");
+        InfixBalancer balancer = new InfixBalancer();
 
         try {
-            tokenizer.tokenize(new File("input.txt"));
-
-        } catch (FileNotFoundException e) {
-            System.out.println("File not found: " + e.getMessage());
+            balancer.tokenize(file);
         } catch (IOException e) {
-            System.out.println("Error reading file: " + e.getMessage());
+            System.err.println("Error reading " + file + ": " + e.getMessage());
+            return;
         }
 
-        System.out.println(tokenizer.toString());
-    
+        System.out.println("File: " + file);
+        for (int i = 0; i < balancer.getTokens().size(); i++) {
+            ArrayList<String> expression = balancer.getTokens().get(i);
+            System.out.printf("%nExpression %d: %s%n", i + 1, String.join("", expression));
+            System.out.println("Stack (base -> top):");
+            boolean balanced = balancer.isBalanced(expression);
+            System.out.println("Result: " + (balanced ? "well-formed" : "not well-formed"));
+        }
     }
 }
